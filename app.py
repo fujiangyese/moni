@@ -1,6 +1,6 @@
 from flask import Flask, render_template
 from flask_sqlalchemy import SQLAlchemy
-import time, os,click
+import time, os, click
 
 # 使用flask模拟一个慢速服务器
 app = Flask(__name__)
@@ -22,8 +22,9 @@ class Movie(db.Model):
     title = db.Column(db.String(60))  # 电影标题
     year = db.Column(db.String(4))  # 电影年份
 
+
 @app.cli.command()
-@click.option('--drop',is_flag=True,help="Create after drop")
+@click.option('--drop', is_flag=True, help="Create after drop")
 def initdb(drop):
     """Initialize the database."""
     if drop:
@@ -35,11 +36,11 @@ def initdb(drop):
 # flask 默认启用多线程
 @app.route('/')
 def index():
-
     # return '<h1>欢迎来到我的watchlist！</h1> <img src="http://helloflask.com/totoro.gif" >'
-    user = User.query.first()  # 读取用户记录
-    movies = Movie.query.all()  # 读取所有电影记录
-    return render_template('index.html', user=user, movies=movies)
+    # user = User.query.first()  # 读取用户记录
+    # movies = Movie.query.all()  # 读取所有电影记录
+    return render_template('index.html')
+
 
 @app.cli.command()
 def forge():
@@ -69,6 +70,22 @@ def forge():
 
     db.session.commit()
     click.echo('Done.')
+
+
+@app.errorhandler(404)
+def page_not_found(e):
+    # user = User.query.first()
+    return render_template('404.html'), 404  # 返回模板和状态码
+
+
+# 定义一个上下文处理函数，存放全局变量，返回的变量可以直接在模板中使用
+@app.context_processor
+def inject_user():
+    user = User.query.first()
+    movies = Movie.query.all()
+    return dict(user=user, movies=movies)
+    # return {'user': user,
+    #         'movies': movies}
 
 
 if __name__ == '__main__':
