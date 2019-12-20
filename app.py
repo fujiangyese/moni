@@ -1,4 +1,4 @@
-from flask import Flask, render_template
+from flask import Flask, render_template, request
 from flask_sqlalchemy import SQLAlchemy
 import time, os, click
 
@@ -34,8 +34,11 @@ def initdb(drop):
 
 
 # flask 默认启用多线程
-@app.route('/')
+@app.route('/', methods=['GET', 'POST'])
 def index():
+    if request.method == 'POST':  #判断是post请求
+        # 获取表单
+    title =
     # return '<h1>欢迎来到我的watchlist！</h1> <img src="http://helloflask.com/totoro.gif" >'
     # user = User.query.first()  # 读取用户记录
     # movies = Movie.query.all()  # 读取所有电影记录
