@@ -2,7 +2,9 @@ from flask import Flask, render_template, request, flash, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 import time, os, click
 
-# 使用flask模拟一个慢速服务器
+from werkzeug.security import generate_password_hash, check_password_hash
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+
 app = Flask(__name__)
 
 app.config['SECRET_KEY'] = 'dev'
@@ -13,9 +15,17 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False  # 关闭对模型修改的
 db = SQLAlchemy(app)  # 初始化扩展，传入程序实例app
 
 
-class User(db.Model):  # 表名将会是user（自动生成，小写处理）
+class User(db.Model, UserMixin):  # 表名将会是user（自动生成，小写处理）
     id = db.Column(db.Integer, primary_key=True)  # 设置id为主键
     name = db.Column(db.String(20))  # 名字
+    username = db.Column(db.String(20))  # 用户名
+    password_hash = db.Column(db.String(128))  # 密码散列值
+
+    def set_password(self, password):  # 用来接收传入的密码
+        self.password_hash = generate_password_hash(password)
+
+    def validate_password(self, password):  # 用于验证密码
+        return check_password_hash(self.password_hash, password)
 
 
 class Movie(db.Model):
@@ -39,6 +49,9 @@ def initdb(drop):
 def index():
     if request.method == 'POST':  # 判断是post请求
         # 获取表单
+        if not current_user.is_authenticated:
+            flash("请先登录")
+            return redirect(url_for('index'))  # 检测是否登录，未登录就跳转到首页
         title = request.form.get('title')  # 传入表单对应输入字段的name值
         year = request.form.get('year')
         # 验证数据
@@ -63,9 +76,11 @@ def index():
 
 # 定义一个编辑电影条目的函数
 @app.route('/movie/edit/<int:movie_id>', methods=['GET', 'POST'])
+@login_required
 def edit(movie_id):
     movie = Movie.query.get_or_404(movie_id)
     if request.method == 'POST':
+
         title = request.form.get('title')
         year = request.form.get('year')
 
@@ -83,6 +98,7 @@ def edit(movie_id):
 
 # 删除电影条目
 @app.route('/movie/delete/<int:movie_id>', methods=['POST'])
+@login_required  # 登录保护
 def delete(movie_id):
     movie = Movie.query.get_or_404(movie_id)
     db.session.delete(movie)  # 删除电影条目
@@ -137,6 +153,79 @@ def inject_user():
 
 # return {'user': user,
 #         'movies': movies}
+
+# 编写命令函数 生成管理员账户
+@app.cli.command()
+@click.option('--username', prompt=True, help="the username used to login.")
+@click.option('--password', prompt=True, hide_input=True, confirmation_prompt=True, help='The password used to login.')
+def admin(username, password):
+    """Create User"""
+    db.create_all()
+    user = User.query.first()
+    if user is not None:
+        click.echo("Updating user...")
+        user.username = username
+        user.set_password(password)
+    else:
+        click.echo('Creating user')
+        user = User(username=username, name='Admin')
+        user.set_password(password)  # 设置密码
+        db.session.add(user)
+    db.session.commit()  # 将数据提交到数据库
+    click.echo('Done.')
+
+
+login_manager = LoginManager(app)  # 实例化扩展类LoginManager
+login_manager.login_view = 'login'
+login_manager.login_message = "未登录，请先登录"
+
+
+@login_manager.user_loader
+def load_user(user_id):  # 创建用户加载回调函数，接收用户ID作为参数
+    user = User.query.get(int(user_id))  # 用id作为User模型的主键查询对应用户
+    return user  # 返回用户对象
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        if not username or not password:
+            flash('Invalid input.')
+            return redirect(url_for('login'))
+        user = User.query.first()
+        # 验证用户名和密码是否一致
+        if username == user.username and user.validate_password(password):
+            login_user(user)  # 登入用户
+            flash('Login success')
+            return redirect(url_for('index'))  # 重定向到首页
+        flash('Invalid username or password')  # 验证失败，显示错误消息
+        return redirect(url_for('login'))  # 重新定位到登录页面
+    return render_template('login.html')  # 以get请求页面时，展示login界面
+
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()  # 登出用户
+    flash("Goodbye~")
+    return redirect(url_for('index'))  # 重定向到首页
+
+
+@app.route('/settings', methods=['POST', 'GET'])
+@login_required
+def settings():
+    if request.method == 'POST':
+        name = request.form.get('name')
+        if not name or len(name) > 20:
+            flash('Invalid input.')
+            return redirect(url_for('settings'))
+        current_user.name = name  # 设置当前用户的用户名为form表格获取到的
+        db.session.commit()   # 提交记录到数据库
+        flash('Settings updated.')
+        return redirect(url_for('index'))
+    return render_template('settings.html')
 
 
 if __name__ == '__main__':
