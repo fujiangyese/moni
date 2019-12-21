@@ -87,7 +87,6 @@ nav li a:hover {
 }
 
 
-
 /* 覆盖某些浏览器对 input 元素定义的字体 */
 input[type=submit] {
     font-family: inherit;
@@ -117,4 +116,20 @@ input[name=year] {
     background-color: black;
     color: white;
     border: 1px solid black;
+}
+
+/*flash显示样式*/
+.alert {
+    position: relative;
+    padding: 7px;
+    margin: 7px 0;
+    border: 1px solid transparent;
+    color: #004085;
+    background-color: #cce5ff;
+    border-color: #b8daff;
+    border-radius: 5px;
+}
+
+.inline-form {
+    display: inline;
 }
